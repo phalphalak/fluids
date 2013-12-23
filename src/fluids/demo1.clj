@@ -1,7 +1,9 @@
 (ns fluids.demo1
-  (:require [kachel.core :as grid])
+  (:require [kachel.core :as grid]
+            [clojure.edn :as edn])
   (:import [javax.swing JFrame JPanel SpringLayout]
-           [java.awt Color Dimension]))
+           [java.awt Color Dimension]
+           [kachel.core SquareGrid]))
 
 (defn paint-background [g width height]
   (.setColor g Color/BLACK)
@@ -52,6 +54,42 @@
             (reset! (grid/coordinate->field world [x 25]) {:type :air}))
         _ (doseq [y (range 15 20)]
             (reset! (grid/coordinate->field world [25 y]) {:type :terrain}))
+        _ (doseq [c [[30 13]
+                     [30 12]
+                     [26 14]
+                     [26 13]
+                     [26 11]
+                     [25 11]
+                     [25 13]
+                     [24 11]
+                     [24 13]
+                     [23 11]
+                     [23 12]
+                     [23 13]
+                     [26 10]
+                     [33 14]
+                     [33 13]
+                     [33 12]
+                     [33 11]
+                     [35 13]
+                     [35 12]
+                     [36 12]
+                     [37 12]
+                     [39 14]
+                     [39 13]
+                     [39 12]
+                     [39 11]
+                     [39 10]]]
+            (reset! (grid/coordinate->field world c) {:type :terrain}))
+        _ (comment (spit "demo.edn" (pr-str {:fields (map deref (.fields world))
+                                             :width (.width world)
+                                             :height (.height world)})))
+        data (read-string (slurp "demo.edn"))
+_ (prn data)
+        world (SquareGrid. (:width data)
+                           (:height data)
+                           (mapv ref (:fields data))
+                           false false)
         simulation {:world (ref world)
                     :cell-size 16}
         panel (proxy [JPanel] []
