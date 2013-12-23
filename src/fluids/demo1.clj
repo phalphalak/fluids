@@ -39,53 +39,7 @@
     (paint-grid g cell-size grid-width grid-height)))
 
 (defn run [& args]
-  (let [world (grid/square-grid :width 40
-                                :height 30
-                                :default-fn (fn [& _]
-                                              (atom {:type :air})))
-        _ (doseq [x (range 40)
-                  y (range 15 30)]
-            (reset! (grid/coordinate->field world [x y]) {:type :terrain}))
-        _ (doseq [y (range 15 25)
-                  x [10 15 20 25]]
-            (reset! (grid/coordinate->field world [x y]) {:type :air}))
-        _ (doseq [x (concat (vec (range 10 16))
-                            (vec (range 20 26)))]
-            (reset! (grid/coordinate->field world [x 25]) {:type :air}))
-        _ (doseq [y (range 15 20)]
-            (reset! (grid/coordinate->field world [25 y]) {:type :terrain}))
-        _ (doseq [c [[30 13]
-                     [30 12]
-                     [26 14]
-                     [26 13]
-                     [26 11]
-                     [25 11]
-                     [25 13]
-                     [24 11]
-                     [24 13]
-                     [23 11]
-                     [23 12]
-                     [23 13]
-                     [26 10]
-                     [33 14]
-                     [33 13]
-                     [33 12]
-                     [33 11]
-                     [35 13]
-                     [35 12]
-                     [36 12]
-                     [37 12]
-                     [39 14]
-                     [39 13]
-                     [39 12]
-                     [39 11]
-                     [39 10]]]
-            (reset! (grid/coordinate->field world c) {:type :terrain}))
-        _ (comment (spit "demo.edn" (pr-str {:fields (map deref (.fields world))
-                                             :width (.width world)
-                                             :height (.height world)})))
-        data (read-string (slurp "demo.edn"))
-_ (prn data)
+  (let [data (read-string (slurp "demo.edn"))
         world (SquareGrid. (:width data)
                            (:height data)
                            (mapv ref (:fields data))
