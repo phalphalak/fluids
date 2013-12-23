@@ -3,6 +3,7 @@
             [clojure.edn :as edn])
   (:import [javax.swing JFrame JPanel SpringLayout JButton]
            [java.awt Color Dimension]
+           [java.awt.event ActionListener]
            [kachel.core SquareGrid]))
 
 (defn paint-background [g width height]
@@ -16,13 +17,21 @@
   (doseq [y (map (partial * size) (range (inc height)))]
     (.drawLine g 0 y (* width size) y)))
 
-(defmulti render-cell (fn [_ _ _ _ cell] (:type cell)))
+(defmulti render-cell (fn [_ _ _ _ cell] (:type (first cell))))
 
-(defmethod render-cell :void [g x y size cell])
+(defmethod render-cell nil [g x y size cell])
 
 (defmethod render-cell :terrain [g x y size cell]
   (doto g
     (.setColor (Color. 0 128 0))
+    (.fillRect (* size x)
+               (* size y)
+               size
+               size)))
+
+(defmethod render-cell :water [g x y size cell]
+  (doto g
+    (.setColor (Color. 192 192 255))
     (.fillRect (* size x)
                (* size y)
                size
@@ -56,12 +65,16 @@
                            :width (.width world)
                            :height (.height world)})))
 
-(defn create-control-panel []
+(defn create-control-panel [step-fn]
   (let [panel (JPanel.)
         layout (SpringLayout.)
         step-button (JButton. "Step")
         play-button (JButton. "Run")
         stop-button (JButton. "Stop")]
+    (doto step-button
+      (.addActionListener (proxy [ActionListener] []
+                            (actionPerformed [event]
+                              (step-fn)))))
     (doto panel
       (.setLayout layout)
       (.add step-button)
@@ -77,12 +90,21 @@
       (.putConstraint SpringLayout/WEST stop-button 5 SpringLayout/EAST play-button))
     panel))
 
+(defn step [world]
+  (prn "Step"))
+
 (defn run [& args]
   (let [world (load-world "demo.edn")
+        _ (doseq [c [[20 5]
+                     [15 20] [15 21] [15 22] [15 23] [15 24] [15 25]
+                     [14 25] [13 25] [12 25] [11 25]
+                     [10 25] [10 24] [10 23]]]
+            (reset! (grid/coordinate->field world c) [{:type :water
+                                                       :volume 1}]))
         simulation {:world (ref world)
                     :cell-size 16}
         grid-panel (create-grid-panel simulation)
-        control-panel (create-control-panel)
+        control-panel (create-control-panel #(step world))
         frame (JFrame. "Liquid test")
         layout (SpringLayout.)
         content-pane (.getContentPane frame)]
