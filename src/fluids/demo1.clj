@@ -1,7 +1,7 @@
 (ns fluids.demo1
   (:require [kachel.core :as grid]
             [clojure.edn :as edn])
-  (:import [javax.swing JFrame JPanel SpringLayout JButton]
+  (:import [javax.swing JFrame JPanel SpringLayout JButton ToolTipManager]
            [java.awt Color Dimension]
            [java.awt.event ActionListener]
            [kachel.core SquareGrid]))
@@ -48,10 +48,17 @@
     (paint-grid g cell-size grid-width grid-height)))
 
 (defn create-grid-panel [simulation]
-  (proxy [JPanel] []
-    (paintComponent [g]
-      (proxy-super paintComponent g)
-      (render g simulation (.getWidth this) (.getHeight this)))))
+  (let [cs (:cell-size simulation)
+        panel (proxy [JPanel] []
+                (paintComponent [g]
+                  (proxy-super paintComponent g)
+                  (render g simulation (.getWidth this) (.getHeight this)))
+                (getToolTipText [event]
+                  (str @(grid/coordinate->field @(:world simulation)
+                                                [(int (/ (.getX event) cs))
+                                                 (int (/ (.getY event) cs))]))))]
+    (.registerComponent (ToolTipManager/sharedInstance) panel)
+    panel))
 
 (defn load-world [file-name]
   (let [data (read-string (slurp file-name))]
@@ -109,7 +116,10 @@
         layout (SpringLayout.)
         content-pane (.getContentPane frame)]
     (doto grid-panel
-      (.setPreferredSize (Dimension. 800 500)))
+      (.setPreferredSize (Dimension. (* (:cell-size simulation)
+                                        (.width world))
+                                     (* (:cell-size simulation)
+                                        (.height world)))))
     (doto content-pane
       (.setLayout layout)
       (.add grid-panel)
@@ -117,7 +127,7 @@
     (doto layout
       (.putConstraint SpringLayout/WEST grid-panel 5 SpringLayout/WEST content-pane)
       (.putConstraint SpringLayout/WEST control-panel 5 SpringLayout/WEST content-pane)
-;      (.putConstraint SpringLayout/NORTH grid-panel 5 SpringLayout/NORTH content-pane)
+                                        ;      (.putConstraint SpringLayout/NORTH grid-panel 5 SpringLayout/NORTH content-pane)
       (.putConstraint SpringLayout/NORTH control-panel 5 SpringLayout/NORTH content-pane)
       (.putConstraint SpringLayout/NORTH grid-panel 5 SpringLayout/SOUTH control-panel)
       (.putConstraint SpringLayout/EAST content-pane 5 SpringLayout/EAST grid-panel)
