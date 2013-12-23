@@ -1,7 +1,7 @@
 (ns fluids.demo1
   (:require [kachel.core :as grid]
             [clojure.edn :as edn])
-  (:import [javax.swing JFrame JPanel SpringLayout]
+  (:import [javax.swing JFrame JPanel SpringLayout JButton]
            [java.awt Color Dimension]
            [kachel.core SquareGrid]))
 
@@ -18,7 +18,7 @@
 
 (defmulti render-cell (fn [_ _ _ _ cell] (:type cell)))
 
-(defmethod render-cell :air [g x y size cell])
+(defmethod render-cell :void [g x y size cell])
 
 (defmethod render-cell :terrain [g x y size cell]
   (doto g
@@ -38,31 +38,69 @@
       (render-cell g x y cell-size @(grid/coordinate->field @(sim :world) [x y])))
     (paint-grid g cell-size grid-width grid-height)))
 
+(defn create-grid-panel [simulation]
+  (proxy [JPanel] []
+    (paintComponent [g]
+      (proxy-super paintComponent g)
+      (render g simulation (.getWidth this) (.getHeight this)))))
+
+(defn load-world [file-name]
+  (let [data (read-string (slurp file-name))]
+    (SquareGrid. (:width data)
+                 (:height data)
+                 (mapv atom (:fields data))
+                 false false)))
+
+(defn store-world [world file-name]
+  (spit file-name (pr-str {:fields (map deref (.fields world))
+                           :width (.width world)
+                           :height (.height world)})))
+
+(defn create-control-panel []
+  (let [panel (JPanel.)
+        layout (SpringLayout.)
+        step-button (JButton. "Step")
+        play-button (JButton. "Run")
+        stop-button (JButton. "Stop")]
+    (doto panel
+      (.setLayout layout)
+      (.add step-button)
+      (.add play-button)
+      (.add stop-button))
+    (doto layout
+      (.putConstraint SpringLayout/WEST step-button 5 SpringLayout/WEST panel)
+      (.putConstraint SpringLayout/NORTH step-button 5 SpringLayout/NORTH panel)
+      (.putConstraint SpringLayout/NORTH play-button 5 SpringLayout/NORTH panel)
+      (.putConstraint SpringLayout/NORTH stop-button 5 SpringLayout/NORTH panel)
+      (.putConstraint SpringLayout/SOUTH panel 5 SpringLayout/SOUTH step-button)
+      (.putConstraint SpringLayout/WEST play-button 5 SpringLayout/EAST step-button)
+      (.putConstraint SpringLayout/WEST stop-button 5 SpringLayout/EAST play-button))
+    panel))
+
 (defn run [& args]
-  (let [data (read-string (slurp "demo.edn"))
-        world (SquareGrid. (:width data)
-                           (:height data)
-                           (mapv ref (:fields data))
-                           false false)
+  (let [world (load-world "demo.edn")
         simulation {:world (ref world)
                     :cell-size 16}
-        panel (proxy [JPanel] []
-                (paintComponent [g]
-                  (proxy-super paintComponent g)
-                  (render g simulation (.getWidth this) (.getHeight this))))
+        grid-panel (create-grid-panel simulation)
+        control-panel (create-control-panel)
         frame (JFrame. "Liquid test")
         layout (SpringLayout.)
         content-pane (.getContentPane frame)]
-    (doto panel
+    (doto grid-panel
       (.setPreferredSize (Dimension. 800 500)))
     (doto content-pane
       (.setLayout layout)
-      (.add panel))
+      (.add grid-panel)
+      (.add control-panel))
     (doto layout
-      (.putConstraint SpringLayout/WEST panel 5 SpringLayout/WEST content-pane)
-      (.putConstraint SpringLayout/NORTH panel 5 SpringLayout/NORTH content-pane)
-      (.putConstraint SpringLayout/EAST content-pane 5 SpringLayout/EAST panel)
-      (.putConstraint SpringLayout/SOUTH content-pane 5 SpringLayout/SOUTH panel))
+      (.putConstraint SpringLayout/WEST grid-panel 5 SpringLayout/WEST content-pane)
+      (.putConstraint SpringLayout/WEST control-panel 5 SpringLayout/WEST content-pane)
+;      (.putConstraint SpringLayout/NORTH grid-panel 5 SpringLayout/NORTH content-pane)
+      (.putConstraint SpringLayout/NORTH control-panel 5 SpringLayout/NORTH content-pane)
+      (.putConstraint SpringLayout/NORTH grid-panel 5 SpringLayout/SOUTH control-panel)
+      (.putConstraint SpringLayout/EAST content-pane 5 SpringLayout/EAST grid-panel)
+      (.putConstraint SpringLayout/EAST control-panel 5 SpringLayout/EAST content-pane)
+      (.putConstraint SpringLayout/SOUTH content-pane 5 SpringLayout/SOUTH grid-panel))
     (doto frame
       .pack
       (.setVisible true))))
