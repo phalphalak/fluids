@@ -1,22 +1,10 @@
 (ns fluids.demo1
   (:require [kachel.core :as grid]
-            [clojure.pprint :refer [pprint]])
-  (:import [javax.swing JFrame JPanel SpringLayout JButton ToolTipManager]
+            [clojure.pprint :refer [pprint]]
+            [fluids.helper :as helper])
+  (:import [javax.swing JFrame SpringLayout]
            [java.awt Color Dimension]
-           [java.awt.event ActionListener]
-           [java.util LinkedList]
-           [kachel.core SquareGrid]))
-
-(defn paint-background [g width height]
-  (.setColor g Color/BLACK)
-  (.fillRect g 0 0 width height))
-
-(defn paint-grid [g size width height]
-  (.setColor g Color/GRAY)
-  (doseq [x (map (partial * size) (range (inc width)))]
-    (.drawLine g x 0 x (* height size)))
-  (doseq [y (map (partial * size) (range (inc height)))]
-    (.drawLine g 0 y (* width size) y)))
+           [java.util LinkedList]))
 
 (defmulti render-cell (fn [_ _ _ _ cell] (first (keys cell))))
 
@@ -24,7 +12,7 @@
 
 (defmethod render-cell :terrain [g x y size cell]
   (doto g
-    (.setColor (Color. 0 128 0))
+    (.setColor (Color. 64 160 48))
     (.fillRect (* size x)
                (* size y)
                size
@@ -40,69 +28,6 @@
                  (* size y)
                  size
                  size))))
-
-(defn render [g sim width height]
-  (let [grid-width (.width (sim :world))
-        grid-height (.height (sim :world))
-        cell-size (sim :cell-size)]
-    (paint-background g width height)
-    (doseq [y (range grid-height)
-            x (range grid-width)]
-      (render-cell g x y cell-size @(grid/coordinate->field (sim :world) [x y])))
-    (paint-grid g cell-size grid-width grid-height)))
-
-(defn create-grid-panel [simulation]
-  (let [cs (:cell-size simulation)
-        panel (proxy [JPanel] []
-                (paintComponent [g]
-                  (proxy-super paintComponent g)
-                  (render g simulation (.getWidth this) (.getHeight this)))
-                (getToolTipText [event]
-                  (let [x (int (/ (.getX event) cs))
-                        y (int (/ (.getY event) cs))]
-                    (format "[%s %s] %s"
-                            x y
-                            (str @(grid/coordinate->field (:world simulation)
-                                                          [x y]))))))]
-    (.registerComponent (ToolTipManager/sharedInstance) panel)
-    panel))
-
-(defn load-world [file-name]
-  (let [data (read-string (slurp file-name))]
-    (SquareGrid. (:width data)
-                 (:height data)
-                 (mapv atom (:fields data))
-                 false false)))
-
-(defn store-world [world file-name]
-  (spit file-name (pr-str {:fields (map deref (.fields world))
-                           :width (.width world)
-                           :height (.height world)})))
-
-(defn create-control-panel [step-fn]
-  (let [panel (JPanel.)
-        layout (SpringLayout.)
-        step-button (JButton. "Step")
-        play-button (JButton. "Run")
-        stop-button (JButton. "Stop")]
-    (doto step-button
-      (.addActionListener (proxy [ActionListener] []
-                            (actionPerformed [event]
-                              (step-fn)))))
-    (doto panel
-      (.setLayout layout)
-      (.add step-button)
-      (.add play-button)
-      (.add stop-button))
-    (doto layout
-      (.putConstraint SpringLayout/WEST step-button 5 SpringLayout/WEST panel)
-      (.putConstraint SpringLayout/NORTH step-button 5 SpringLayout/NORTH panel)
-      (.putConstraint SpringLayout/NORTH play-button 5 SpringLayout/NORTH panel)
-      (.putConstraint SpringLayout/NORTH stop-button 5 SpringLayout/NORTH panel)
-      (.putConstraint SpringLayout/SOUTH panel 5 SpringLayout/SOUTH step-button)
-      (.putConstraint SpringLayout/WEST play-button 5 SpringLayout/EAST step-button)
-      (.putConstraint SpringLayout/WEST stop-button 5 SpringLayout/EAST play-button))
-    panel))
 
 (comment
   (defn process-queue [simulation queue]
@@ -174,12 +99,12 @@
           (flood-fill-pressure simulation [x y]))))))
 
 (defn run [& args]
-  (let [world (load-world "demo.edn")
+  (let [world (helper/load-world "demo.edn")
         simulation {:world world
                     :cell-size 16}
-        grid-panel (create-grid-panel simulation)
-        control-panel (create-control-panel #(do (step simulation)
-                                                 (.repaint grid-panel)))
+        grid-panel (helper/create-grid-panel simulation render-cell)
+        control-panel (helper/create-control-panel #(do (step simulation)
+                                                        (.repaint grid-panel)))
         frame (JFrame. "Liquid test")
         layout (SpringLayout.)
         content-pane (.getContentPane frame)]
