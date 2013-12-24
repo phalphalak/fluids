@@ -1,9 +1,10 @@
 (ns fluids.demo1
   (:require [kachel.core :as grid]
-            [clojure.edn :as edn])
+            [clojure.pprint :refer [pprint]])
   (:import [javax.swing JFrame JPanel SpringLayout JButton ToolTipManager]
            [java.awt Color Dimension]
            [java.awt.event ActionListener]
+           [java.util LinkedList]
            [kachel.core SquareGrid]))
 
 (defn paint-background [g width height]
@@ -17,7 +18,7 @@
   (doseq [y (map (partial * size) (range (inc height)))]
     (.drawLine g 0 y (* width size) y)))
 
-(defmulti render-cell (fn [_ _ _ _ cell] (:type (first cell))))
+(defmulti render-cell (fn [_ _ _ _ cell] (first (keys cell))))
 
 (defmethod render-cell nil [g x y size cell])
 
@@ -30,21 +31,24 @@
                size)))
 
 (defmethod render-cell :water [g x y size cell]
-  (doto g
-    (.setColor (Color. 192 192 255))
-    (.fillRect (* size x)
-               (* size y)
-               size
-               size)))
+  (let [pressure (get-in cell [:water :temp :pressure] 0)]
+    (doto g
+      (.setColor (Color. (int (- 192 (* 18 pressure)))
+                         (int (- 192 (* 18 pressure)))
+                         255))
+      (.fillRect (* size x)
+                 (* size y)
+                 size
+                 size))))
 
 (defn render [g sim width height]
-  (let [grid-width (.width @(sim :world))
-        grid-height (.height @(sim :world))
+  (let [grid-width (.width (sim :world))
+        grid-height (.height (sim :world))
         cell-size (sim :cell-size)]
     (paint-background g width height)
     (doseq [y (range grid-height)
             x (range grid-width)]
-      (render-cell g x y cell-size @(grid/coordinate->field @(sim :world) [x y])))
+      (render-cell g x y cell-size @(grid/coordinate->field (sim :world) [x y])))
     (paint-grid g cell-size grid-width grid-height)))
 
 (defn create-grid-panel [simulation]
@@ -54,9 +58,12 @@
                   (proxy-super paintComponent g)
                   (render g simulation (.getWidth this) (.getHeight this)))
                 (getToolTipText [event]
-                  (str @(grid/coordinate->field @(:world simulation)
-                                                [(int (/ (.getX event) cs))
-                                                 (int (/ (.getY event) cs))]))))]
+                  (let [x (int (/ (.getX event) cs))
+                        y (int (/ (.getY event) cs))]
+                    (format "[%s %s] %s"
+                            x y
+                            (str @(grid/coordinate->field (:world simulation)
+                                                          [x y]))))))]
     (.registerComponent (ToolTipManager/sharedInstance) panel)
     panel))
 
@@ -97,21 +104,82 @@
       (.putConstraint SpringLayout/WEST stop-button 5 SpringLayout/EAST play-button))
     panel))
 
-(defn step [world]
-  (prn "Step"))
+(comment
+  (defn process-queue [simulation queue]
+    (let [world (:world simulation)]
+      (loop []
+        (when-not (.isEmpty queue)
+          (let [item (.pop queue)]
+            (prn item)
+            (recur))))
+      (prn queue))))
+
+(defn flood-fill-pressure [simulation coords]
+  (let [world (:world simulation)
+        queue (LinkedList. [coords])]
+    (loop []
+      (let [[x y] (.pop queue)
+            field-ref (grid/coordinate->field world [x y])
+            field @field-ref
+            pressure (get-in field [:water :temp :pressure] 0)
+            up (grid/neighbour world [x y] :up)
+            down (grid/neighbour world [x y] :down)
+            left (grid/neighbour world [x y] :left)
+            right (grid/neighbour world [x y] :right)]
+        (pprint ["next:" [x y] {:field field
+                                :field-ref field-ref
+                                :up up
+                                :down down
+                                :left left
+                                :right right}])
+        (reset! field-ref (-> field
+                              (assoc-in [:water :temp :pressure] pressure)
+                              (assoc-in [:water :processed] true)))
+        (when (and up
+                   (:water @up)
+                   (> pressure (inc (get-in @up [:water :temp :pressure] 0))))
+          (prn :up)
+          (reset! up (assoc-in field [:water :temp :pressure] (dec pressure)))
+          (.push queue [x (dec y)]))
+        (when (and down
+                   (:water @down)
+                   (> pressure (dec (get-in @down [:water :temp :pressure] 0))))
+          (prn :down)
+          (reset! down (assoc-in field [:water :temp :pressure] (inc pressure)))
+          (.push queue [x (inc y)]))
+        (when (and left
+                   (:water @left)
+                   (> pressure (get-in @left [:water :temp :pressure] 0)))
+          (prn :left)
+          (reset! left (assoc-in field [:water :temp :pressure] pressure))
+          (.push queue [(dec x) y]))
+        (when (and right
+                   (:water @right)
+                   (> pressure (get-in @right [:water :temp :pressure] 0)))
+          (prn :right)
+          (reset! right (assoc-in field [:water :temp :pressure] pressure))
+          (.push queue [(inc x) y]))
+        (when-not (.isEmpty queue)
+          (recur))))))
+
+(defn step [simulation]
+  (let [world (:world simulation)]
+    (doseq [y (range (.height world))
+            x (range (.width world))]
+      (let [field-ref (grid/coordinate->field world [x y])]
+        (when-let [water (and (not (get-in @field-ref [:water :processed]))
+                              (:water @field-ref))] (prn "!!!!"
+                                                         (grid/coordinate->field world [x y])
+                                                         water [x y])
+          (flood-fill-pressure simulation [x y]))))))
 
 (defn run [& args]
   (let [world (load-world "demo.edn")
-        _ (doseq [c [[20 5]
-                     [15 20] [15 21] [15 22] [15 23] [15 24] [15 25]
-                     [14 25] [13 25] [12 25] [11 25]
-                     [10 25] [10 24] [10 23]]]
-            (reset! (grid/coordinate->field world c) [{:type :water
-                                                       :volume 1}]))
-        simulation {:world (ref world)
+        simulation {:world world
                     :cell-size 16}
         grid-panel (create-grid-panel simulation)
-        control-panel (create-control-panel #(step world))
+        control-panel (create-control-panel #(do (step simulation)
+                                                 (.repaint grid-panel)))
         frame (JFrame. "Liquid test")
         layout (SpringLayout.)
         content-pane (.getContentPane frame)]
