@@ -57,15 +57,16 @@
                 (getToolTipText [event]
                   (let [x (int (/ (.getX event) cs))
                         y (int (/ (.getY event) cs))]
-                    (format "<html>%s</html>"
+                    (format "<html><font face=\"Monospaced\">%s</font></html>"
                             (clojure.string/replace
                              (clojure.string/replace (pprint-str {:coords [x y]
                                                                   :content @(grid/coordinate->field (:world simulation)
                                                                                                     [x y])})
                                                      #"\n" "<br>")
                              #" " "&nbsp;")))))]
-    (.setDismissDelay (ToolTipManager/sharedInstance) Integer/MAX_VALUE)
-    (.registerComponent (ToolTipManager/sharedInstance) panel)
+    (doto (ToolTipManager/sharedInstance)
+      (.setDismissDelay Integer/MAX_VALUE)
+      (.registerComponent panel))
     panel))
 
 (defn create-control-panel [step-fn]
