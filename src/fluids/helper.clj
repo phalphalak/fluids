@@ -4,8 +4,8 @@
                                     *print-right-margin*
                                     *print-miser-width*]])
   (:import [kachel.core SquareGrid]
-           [javax.swing JPanel ToolTipManager SpringLayout JButton]
-           [java.awt.event ActionListener]
+           [javax.swing JPanel ToolTipManager SpringLayout JButton AbstractAction KeyStroke JComponent]
+           [java.awt.event ActionListener KeyEvent MouseAdapter]
            [java.io StringWriter]
            [java.awt Color]))
 
@@ -63,10 +63,52 @@
                                                                   :content @(grid/coordinate->field (:world simulation)
                                                                                                     [x y])})
                                                      #"\n" "<br>")
-                             #" " "&nbsp;")))))]
+                             #" " "&nbsp;")))))
+        mouse-listener (proxy [MouseAdapter] []
+                         (mouseMoved [event]
+                           (reset! (:mouse simulation)
+                                   [(int (/ (.getX event) (:cell-size simulation)))
+                                    (int (/ (.getY event) (:cell-size simulation)))])))
+        add-water-action (proxy [AbstractAction ActionListener] []
+                           (actionPerformed [event]
+                             (reset! (grid/coordinate->field (:world simulation)
+                                                             @(:mouse simulation))
+                                     {:water {:volume 1 :pressure {:total 0
+                                                                   :directions []}}})
+                             (.repaint panel)))
+        clear-action (proxy [AbstractAction ActionListener] []
+                           (actionPerformed [event]
+                             (reset! (grid/coordinate->field (:world simulation)
+                                                             @(:mouse simulation))
+                                     {})
+                             (.repaint panel)))
+        add-terrain-action (proxy [AbstractAction ActionListener] []
+                             (actionPerformed [event]
+                               (reset! (grid/coordinate->field (:world simulation)
+                                                               @(:mouse simulation))
+                                       {:terrain {}})
+                               (.repaint panel)))
+        save-world-action (proxy [AbstractAction ActionListener] []
+                            (actionPerformed [event]
+                              (store-world (:world simulation) "save.edn")))]
     (doto (ToolTipManager/sharedInstance)
       (.setDismissDelay Integer/MAX_VALUE)
       (.registerComponent panel))
+    (doto panel
+      (.addMouseListener mouse-listener)
+      (.addMouseMotionListener mouse-listener)
+      (.. (getInputMap JComponent/WHEN_IN_FOCUSED_WINDOW)
+          (put (KeyStroke/getKeyStroke KeyEvent/VK_W 0 false) :add-water))
+      (.. (getInputMap JComponent/WHEN_IN_FOCUSED_WINDOW)
+          (put (KeyStroke/getKeyStroke KeyEvent/VK_X 0 false) :clear-field))
+      (.. (getInputMap JComponent/WHEN_IN_FOCUSED_WINDOW)
+          (put (KeyStroke/getKeyStroke KeyEvent/VK_T 0 false) :add-terrain))
+      (.. (getInputMap JComponent/WHEN_IN_FOCUSED_WINDOW)
+          (put (KeyStroke/getKeyStroke KeyEvent/VK_S 0 false) :save-world))
+      (.. (getActionMap) (put :add-water add-water-action))
+      (.. (getActionMap) (put :clear-field clear-action))
+      (.. (getActionMap) (put :add-terrain add-terrain-action))
+      (.. (getActionMap) (put :save-world save-world-action)))
     panel))
 
 (defn create-control-panel [step-fn]
