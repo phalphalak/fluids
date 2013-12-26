@@ -1,8 +1,12 @@
 (ns fluids.helper
-  (:require [kachel.core :as grid])
+  (:require [kachel.core :as grid]
+            [clojure.pprint :refer [pprint
+                                    *print-right-margin*
+                                    *print-miser-width*]])
   (:import [kachel.core SquareGrid]
            [javax.swing JPanel ToolTipManager SpringLayout JButton]
            [java.awt.event ActionListener]
+           [java.io StringWriter]
            [java.awt Color]))
 
 (defn load-world [file-name]
@@ -38,6 +42,12 @@
       (cell-renderer g x y cell-size @(grid/coordinate->field (sim :world) [x y])))
     (paint-grid g cell-size grid-width grid-height)))
 
+(defn pprint-str [s]
+  (binding [*print-right-margin* 20]
+           (let [w (StringWriter.)]
+             (pprint s w)
+             (.toString w))))
+
 (defn create-grid-panel [simulation cell-renderer]
   (let [cs (:cell-size simulation)
         panel (proxy [JPanel] []
@@ -47,10 +57,14 @@
                 (getToolTipText [event]
                   (let [x (int (/ (.getX event) cs))
                         y (int (/ (.getY event) cs))]
-                    (format "[%s %s] %s"
-                            x y
-                            (str @(grid/coordinate->field (:world simulation)
-                                                          [x y]))))))]
+                    (format "<html>%s</html>"
+                            (clojure.string/replace
+                             (clojure.string/replace (pprint-str {:coords [x y]
+                                                                  :content @(grid/coordinate->field (:world simulation)
+                                                                                                    [x y])})
+                                                     #"\n" "<br>")
+                             #" " "&nbsp;")))))]
+    (.setDismissDelay (ToolTipManager/sharedInstance) Integer/MAX_VALUE)
     (.registerComponent (ToolTipManager/sharedInstance) panel)
     panel))
 

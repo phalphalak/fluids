@@ -4,4 +4,4 @@
   (:gen-class))
 
 (defn -main [& args]
-  (demo1/run))
+  (demo2/run))
