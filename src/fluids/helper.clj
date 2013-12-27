@@ -1,5 +1,6 @@
 (ns fluids.helper
   (:require [kachel.core :as grid]
+            [clojure.tools.nrepl.server :refer [start-server stop-server]]
             [clojure.pprint :refer [pprint
                                     *print-right-margin*
                                     *print-miser-width*]])
@@ -8,6 +9,12 @@
            [java.awt.event ActionListener KeyEvent MouseAdapter]
            [java.io StringWriter]
            [java.awt Color]))
+
+(defn start-nrepl []
+  (def server (start-server :port 7888)))
+
+(defn stop-nrepl []
+  (stop-server server))
 
 (defn load-world [file-name]
   (let [data (read-string (slurp file-name))]
@@ -73,8 +80,7 @@
                            (actionPerformed [event]
                              (reset! (grid/coordinate->field (:world simulation)
                                                              @(:mouse simulation))
-                                     {:water {:volume 1 :pressure {:total 0
-                                                                   :directions []}}})
+                                     {:water {:volume 1 :pressure 0}})
                              (.repaint panel)))
         clear-action (proxy [AbstractAction ActionListener] []
                            (actionPerformed [event]
